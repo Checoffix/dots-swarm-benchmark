@@ -37,6 +37,7 @@ partial struct MovementSystem : ISystem
             SpatialHashMap = SpatialHashMap,
             MinSeparationRadius =  separationData.MinSeparationRadius,
             MaxNeighboursCount = separationData.MaxNeighboursCount,
+            SeparationForce = separationData.SeparationForce
         }.ScheduleParallel(buildHandle);
         state.Dependency = moveHandle;
         

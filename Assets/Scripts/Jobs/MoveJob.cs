@@ -16,6 +16,7 @@ public partial struct MoveJob : IJobEntity
     [ReadOnly] public NativeParallelMultiHashMap<int, float3> SpatialHashMap;
     public float MinSeparationRadius;
     public int MaxNeighboursCount;
+    public float SeparationForce;
     public void Execute(ref LocalTransform transform, in Speed move)
     {
         float3 toTarget = TargetPos - transform.Position;
@@ -39,7 +40,7 @@ public partial struct MoveJob : IJobEntity
                 }
             }
         } 
-        dir += separationVector * 3f;
+        dir += separationVector * SeparationForce;
         float lenSq = math.lengthsq(dir);
         if (lenSq > 1f)
             dir *= math.rsqrt(lenSq);
