@@ -1,32 +1,42 @@
 using Unity.Burst;
 using Unity.Entities;
-using Unity.Mathematics;
+using Unity.Jobs;
 using Unity.Transforms;
 
+[UpdateBefore(typeof(MovementSystem))]
 partial struct CubesSpawnerSystem : ISystem
 {
-    private Random _rnd;
+    private EntityQuery _cubesQuery;
     [BurstCompile]
     public void OnCreate(ref SystemState state)
     {
-        _rnd = new Random(51897151u);
+        _cubesQuery = SystemAPI.QueryBuilder()
+            .WithAll<LocalTransform, Speed>()
+            .Build();
         state.RequireForUpdate<EntitiesReferences>();
         state.RequireForUpdate<SpawnData>();
         state.RequireForUpdate<SeparationData>();
+        state.RequireForUpdate<BeginSimulationEntityCommandBufferSystem.Singleton>();
     }
 
     [BurstCompile]
     public void OnUpdate(ref SystemState state)
     {
-        float dt = SystemAPI.Time.DeltaTime;
-
-        EntitiesReferences entitiesReferences = SystemAPI.GetSingleton<EntitiesReferences>();
         SpawnData spawnData = SystemAPI.GetSingleton<SpawnData>();
-        for (int i = 0; i < spawnData.CubesCount; i++)
+        int spawnCount = spawnData.CubesCount - _cubesQuery.CalculateEntityCount();
+        if (spawnCount <= 0) return;
+        EntitiesReferences entitiesReferences = SystemAPI.GetSingleton<EntitiesReferences>();
+        var entityCommandBuffer = SystemAPI.GetSingleton<BeginSimulationEntityCommandBufferSystem.Singleton>()    
+            .CreateCommandBuffer(state.WorldUnmanaged)
+            .AsParallelWriter();
+        SpawnJob job = new SpawnJob
         {
-            Entity entity = state.EntityManager.Instantiate(entitiesReferences.BulletPrefabEntity);
-            SystemAPI.SetComponent(entity, LocalTransform.FromPosition(new float3(_rnd.NextFloat(-spawnData.SpawnMaxDistance, spawnData.SpawnMaxDistance), _rnd.NextFloat(-spawnData.SpawnMaxDistance, spawnData.SpawnMaxDistance), 0)));
-        }
-        state.Enabled = false;
+            EntitiesReferences = entitiesReferences,
+            SpawnData = spawnData,
+            Seed = (uint)(SystemAPI.Time.ElapsedTime * 1000),
+            EntityCommandBuffer = entityCommandBuffer
+        };
+        JobHandle spawnJob = job.ScheduleByRef(spawnCount, 64, state.Dependency);
+        state.Dependency = spawnJob;
     }
 }
