@@ -3,6 +3,7 @@ using UnityEngine;
 
 class TargetAuthoring : MonoBehaviour
 {
+    public float killAuraRadius;
     class Baker : Baker<TargetAuthoring>
     {
         public override void Bake(TargetAuthoring authoring)
@@ -10,7 +11,7 @@ class TargetAuthoring : MonoBehaviour
             Entity entity = GetEntity(TransformUsageFlags.Dynamic);
             AddComponent(entity, new TargetData
             {
-                targetPos = authoring.transform.position
+                KillAuraRadius = authoring.killAuraRadius
             });
         }
     }

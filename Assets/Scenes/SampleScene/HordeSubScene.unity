@@ -295,6 +295,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 89b5a996062aba647ba0a3160c63531a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TargetAuthoring
+  killAuraRadius: 3
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
