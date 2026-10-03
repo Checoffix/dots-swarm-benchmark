@@ -1,4 +1,3 @@
-
 <div align="center">
 
 # Horde Swarm — DOTS Benchmark
@@ -12,8 +11,6 @@
 ![Entities](https://img.shields.io/badge/Entities-6.6.0-1f2328?style=flat-square)
 ![Burst](https://img.shields.io/badge/Burst-Jobs-1f2328?style=flat-square)
 ![Platform](https://img.shields.io/badge/Platform-PC%20Standalone-1f2328?style=flat-square)
-![GC](https://img.shields.io/badge/GC-0%20B%20(Zero--Alloc)-brightgreen?style=flat-square)
-![100k](https://img.shields.io/badge/Entities-100k%20%40%2089%20FPS-blue?style=flat-square)
 
 </div>
 
@@ -21,16 +18,12 @@
 
 ## Demo
 
-<p align="center">
-  <img src="docs/hero.gif" alt="Swarm of cubes converging on the target with kill aura" width="860"/>
-  <br/>
-  <sub>100k entities · kill aura radius 5 · Player build</sub>
-</p>
+> *Demo capture coming soon (Standalone Player build, 100k entities).*
 
 ## TL;DR
 
 - **What:** High-performance flocking and horde simulation in Unity 6 DOTS (Entities 1.0, Burst, URP BatchRendererGroup) utilizing a custom spatial hash grid, position-based dynamics (PBD) separation, and zero-allocation continuous spawn/destroy cycles.
-- **Study 1 (swarm):** Scaled from 10k to 100k dynamic entities on an Intel Core i5-8400. 100k entities achieve a median frame time of **11.23 ms (~89.1 FPS)** with 2D spatial hashing, maintaining **strictly 0 B GC allocations** and a rock-solid **3.1 MB managed heap**.
+- **Study 1 (swarm):** Scaled from 10k to 100k dynamic entities on an Intel Core i5-8400. 100k entities achieve a median frame time of **11.23 ms (~89.1 FPS)** in Render mode (**8.18 ms** No-Render) with 2D spatial hashing, maintaining **strictly 0 B GC allocations** and a rock-solid **3.1 MB managed heap**.
 - **Study 2 (straight-line movement):** Controlled baseline comparing the computational cost of moving 10k / 50k / 100k objects across four architectural approaches (Classic GameObjects, Job System Transforms, DOTS `IJobEntity`, and hierarchical parent translation).
 - **How it was measured:** Automated standalone player builds with rendering enabled and disabled, 10s warm-up, and 30s sampling window logged to CSV (see [Methodology](#methodology)).
 
@@ -47,7 +40,7 @@
 
 | Variant | 10 000 | 50 000 | 100 000 |
 |:--|:--:|:--:|:--:|
-| A: GO + Box2D | TBD / TBD | n/m | n/m |
+| A: GO + Box2D | 13.60 / 18.40 | n/m | n/m |
 | B: DOTS, 3D scan | 2.74 / 4.63 | 15.99 / 21.47 | 35.68 / 43.45 |
 | C: DOTS, 2D scan | 1.99 / 4.86 | 5.51 / 7.65 | 11.23 / 14.81 |
 
@@ -64,9 +57,6 @@
 
 ## Methodology
 
-> [!TIP]
-> Measure in a **Player build**, not the Editor, with vsync off. Frame times come from a logger (CSV); the Profiler is used only for the per-job breakdown because it adds its own overhead.
-
 > [!NOTE]
 > **Render / No-Render.** Every configuration is built and measured twice. **Render** is the full frame (what the player sees). **No-Render** has the renderers disabled and isolates simulation and transform cost from draw cost, which differs between GameObjects (`MeshRenderer`) and Entities Graphics.
 
@@ -78,9 +68,9 @@
 | Spawn | Uniform distribution across XY plane |
 | Warm-up / sample window | 10 s warm-up / 30 s sampling window (`FrameTimeLogger`) |
 | Runs per cell | 30 s continuous window (~800 – 14,000+ logged frames per run) |
-| Frame time | per-frame duration (`Time.unscaledDeltaTime`) logged to CSV (`FrameTimeLogger`) |
+| Frame time | per-frame duration (`Time.unscaledDeltaTime`) logged to CSV, see `Assets/Scripts/FrameTimeLogger.cs` |
 | Median | 50th percentile of per-frame times |
-| p99 | 99th percentile of per-frame times (1% low: 99% of frames are faster than this value) |
+| p99 | 99th percentile of per-frame times (Excel `PERCENTILE.INC`): 99% of frames are faster than this value; see `tools/analyze_frametimes.py` |
 | Other metrics | GC alloc (Profile Analyzer), Native Memory / Managed Heap (Memory Profiler) |
 
 ---
@@ -113,9 +103,9 @@
 
 |      Variant       | Entities |    Render: median / p99     | No-Render: median / p99 | Simulation time | GC alloc | Memory |
 | :----------------: | :------: | :-------------------------: | :---------------------: | :-------------: | :------: | :----: |
-|  **A** GO + Box2D  |  10 000  |          TBD / TBD          |        TBD / TBD        |       TBD       |   TBD    |  TBD   |
-|  **A** GO + Box2D  |  50 000  | n/m: TBD (10k already X ms) |            –            |        –        |    –     |   –    |
-|  **A** GO + Box2D  | 100 000  |          n/m: TBD           |            –            |        –        |    –     |   –    |
+|  **A** GO + Box2D  |  10 000  |        13.60 / 18.40        |      12.22 / 20.00      |       30        |  236 B   | 256 MB / 5.2 MB |
+|  **A** GO + Box2D  |  50 000  |  n/m: 10k already 13.6 ms   |            –            |        –        |    –     |   –    |
+|  **A** GO + Box2D  | 100 000  |  n/m: 10k already 13.6 ms   |            –            |        –        |    –     |   –    |
 | **B** DOTS 3D scan |  10 000  |         2.74 / 4.63         |       2.13 / 4.43       |       30        |   0 B    | 260 MB / 3.1 MB |
 | **B** DOTS 3D scan |  50 000  |        15.99 / 21.47        |      14.40 / 17.45      |       30        |   0 B    | 272 MB / 3.1 MB |
 | **B** DOTS 3D scan | 100 000  |        35.68 / 43.45        |      33.26 / 40.91      |       30        |   0 B    | 289 MB / 3.1 MB |
@@ -123,30 +113,27 @@
 | **C** DOTS 2D scan |  50 000  |         5.51 / 7.65         |       4.09 / 5.01       |       30        |   0 B    | 272 MB / 3.1 MB |
 | **C** DOTS 2D scan | 100 000  |        11.23 / 14.81        |       8.18 / 9.61       |       30        |   0 B    | 289 MB / 3.1 MB |
 
-<p align="center">
-  <img src="docs/scaling-study1.png" alt="Simulation time vs entity count, study 1" width="620"/>
-  <br/><sub>Simulation time vs N, comparing 3D and 2D spatial hash scans</sub>
-</p>
-
 ### Profiler captures
 
-| Frame breakdown (10k) | Memory breakdown (10k) |
+| Frame breakdown (GO, 10k) | Memory breakdown (GO, 10k) |
+|:--:|:--:|
+| <img src="docs/profiler-frame-go-10k.png" alt="Profile Analyzer GO 10k" width="420"/> | <img src="docs/memory-breakdown-go-10k.png" alt="Memory breakdown GO 10k" width="420"/> |
+| <sub>10k GameObjects: Median 13.6 ms (~73 FPS), GC Collect 1.75 ms</sub> | <sub>Managed Heap: 5.2 MB, Native: 256.5 MB, 10 007 GameObjects (70 184 Scene Objects)</sub> |
+
+| Frame breakdown (DOTS, 10k) | Memory breakdown (DOTS, 10k) |
 |:--:|:--:|
 | <img src="docs/profiler-frame-10k.png" alt="Profile Analyzer 10k" width="420"/> | <img src="docs/memory-breakdown-10k.png" alt="Memory breakdown 10k" width="420"/> |
 | <sub>10k entities: Median 2.7 ms (~370 FPS), zero GC Collect</sub> | <sub>Managed Heap: 3.1 MB, Native: 260.1 MB, 7 GameObjects total</sub> |
 
-| Frame breakdown (50k) | Memory breakdown (50k) |
+| Frame breakdown (DOTS, 50k) | Memory breakdown (DOTS, 50k) |
 |:--:|:--:|
 | <img src="docs/profiler-frame-50k.png" alt="Profile Analyzer 50k" width="420"/> | <img src="docs/memory-breakdown-50k.png" alt="Memory breakdown 50k" width="420"/> |
 | <sub>50k entities: Median 7.4 ms (~135 FPS), zero GC Collect</sub> | <sub>Managed Heap: 3.1 MB, Native: 271.8 MB, 7 GameObjects total</sub> |
 
-| Frame breakdown (100k) | Memory breakdown (100k) |
+| Frame breakdown (DOTS, 100k) | Memory breakdown (DOTS, 100k) |
 |:--:|:--:|
 | <img src="docs/profiler-frame-100k.png" alt="Profile Analyzer 100k" width="420"/> | <img src="docs/memory-breakdown-100k.png" alt="Memory breakdown 100k" width="420"/> |
 | <sub>100k entities: Median 15.0 ms (~67 FPS), zero GC Collect</sub> | <sub>Managed Heap: 3.1 MB, Native: 288.8 MB, 7 GameObjects total</sub> |
-
-> [!NOTE]
-> The spatial hash is rebuilt every frame (`NativeParallelMultiHashMap`) in parallel via `BuildSpatialHashJob`, avoiding costly incremental spatial updates.
 
 ## Architecture
 
@@ -199,7 +186,7 @@ Variant 3 is compared against variants 1 and 2, where the cubes have no common p
 - Variants 1, 2, and 4: all GameObjects/entities are flat (no parents), the best case for `TransformAccessArray`. Variant 3: one empty parent for all cubes.
 - Same mesh, material and camera; SRP Batcher / GPU instancing set the same way — TBD.
 - Worker thread count recorded: TBD.
-- Cubes are not wrapped around; the warm-up plus window is short enough that they stay in the camera view in the Render build — TBD: speed × duration vs view depth.
+- Cubes are not wrapped around; the warm-up plus window is short enough that they stay in the camera view in the Render build.
 
 </details>
 
@@ -220,11 +207,6 @@ Variant 3 is compared against variants 1 and 2, where the cubes have no common p
 | **4** DOTS, IJobEntity | 50 000 | TBD / TBD | TBD / TBD | TBD | TBD | TBD |
 | **4** DOTS, IJobEntity | 100 000 | TBD / TBD | TBD / TBD | TBD | TBD | TBD |
 
-<p align="center">
-  <img src="docs/scaling-study2.png" alt="Movement cost vs entity count, study 2" width="620"/>
-  <br/><sub>TBD: movement cost vs N, one line per variant</sub>
-</p>
-
 > [!NOTE]
 > Variant 3 isolates the cost of hierarchy updates by translating a single root parent instead of N individual entity transforms.
 
@@ -241,12 +223,14 @@ Per-frame CSV logs are recorded via `FrameTimeLogger` into `Application.persiste
 > **Limitations and scope:**
 > - Study 1 compares distinct architectural paradigms for swarm separation (Box2D iterative solver vs custom DOTS Spatial Hash).
 > - Measurements reflect a single reference hardware configuration (Intel Core i5-8400, PC Standalone, D3D12).
+> - Classic GameObjects were not measured at 50k and 100k in Study 1 because 10k entities already exceeded the 16.6 ms frame budget (13.6 ms simulation + GC spikes).
 
 <details>
 <summary><b>Design decisions</b></summary>
 
 - **Per-frame Spatial Hash rebuild:** Rebuilding the `NativeParallelMultiHashMap` from scratch every frame in parallel via `BuildSpatialHashJob` proved faster and simpler than tracking incremental cell migrations for 100k constantly moving entities.
 - **Structural changes via ECB:** Spawning and despawning are deferred to `EndSimulationEntityCommandBufferSystem` to prevent job pipeline stalls and keep parallel worker threads saturated.
+- **2D vs 3D Hash Search:** Reducing neighbor checks from 27 cells to 9 planar cells (Z = 0) reduced 100k simulation frame time from 35.68 ms to 11.23 ms (~3.2x speedup).
 
 </details>
 
@@ -261,7 +245,10 @@ git clone https://github.com/Checoffix/dots-swarm-benchmark.git
 ```
 
 1. Open the project in Unity Hub.
-2. Open `SampleScene` and subscene `HordeSubScene`.
+2. Open the scene for the study you want to run:
+   - **Study 1 (DOTS):** `Assets/Scenes/Study1/DOTS_Scene.unity` (with subscene `HordeSubScene.unity`)
+   - **Study 1 (GameObjects):** `Assets/Scenes/Study1/GO_Scene.unity`
+   - **Study 2 (Movement):** `Assets/Scenes/Study2/` (coming soon)
 3. **Play** to run in Editor, or **File → Build Settings → Build** for standalone benchmarking with `FrameTimeLogger`.
 
 ## About
