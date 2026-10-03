@@ -28,13 +28,10 @@ public partial struct MoveJob : IJobEntity
         {
             for (int j = -1; j <= 1; j++)
             {
-                for (int k = -1; k <= 1; k++)
-                {
-                    if (i == 0 && j == 0 && k == 0) continue;
-                    separationVector += CheckNeighbours(
-                        SpatialHashMap.GetValuesForKey(GridHelper.GetHash(new int3(position.x + i, position.y + j,
-                            position.z + k))), transform.Position);
-                }
+                if (i == 0 && j == 0) continue;
+                separationVector += CheckNeighbours(
+                    SpatialHashMap.GetValuesForKey(GridHelper.GetHash(new int3(position.x + i, position.y + j,
+                        position.z))), transform.Position);
             }
         } 
         dir += separationVector * SeparationForce;
