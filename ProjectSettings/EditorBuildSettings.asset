@@ -6,6 +6,12 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
+    path: Assets/Scenes/Study2/GO_Scene.unity
+    guid: d5eb3a6b7b4186749b0f1b6dc1632c03
+  - enabled: 1
+    path: Assets/Scenes/Study2/DOTS_Scene.unity
+    guid: f0baa16a270542a4db95837a62044429
+  - enabled: 1
     path: Assets/Scenes/Study1/GO_Scene.unity
     guid: ef3b91c83f44d3b4e8efe16493c5a5a4
   - enabled: 1
