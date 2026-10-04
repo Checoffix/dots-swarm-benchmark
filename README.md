@@ -2,8 +2,7 @@
 
 # Horde Swarm — DOTS Benchmark
 
-**Mass-entity simulation in Unity DOTS: spatial-hash separation, Burst jobs, EntityCommandBuffer.**<br/>
-<sub>My first DOTS project, documented as a measurement log: change → profiler → result.</sub>
+**Mass-entity simulation in Unity DOTS: spatial hash separation, Burst jobs, EntityCommandBuffer.**
 
 <br/>
 
@@ -16,41 +15,44 @@
 
 ---
 
+> [!NOTE]
+> **Author's note:** This is my first project exploring Unity DOTS. I am a CS student, and this repository is documented as a practical learning log: change in code → profiler measurement → result.
+
 ## Demo
 
 > *Demo capture coming soon (Standalone Player build, 100k entities).*
 
 ## TL;DR
 
-- **What:** High-performance flocking and horde simulation in Unity 6 DOTS (Entities 1.0, Burst, URP BatchRendererGroup) utilizing a custom spatial hash grid, position-based dynamics (PBD) separation, and zero-allocation continuous spawn/destroy cycles.
-- **Study 1 (swarm):** Scaled from 10k to 100k dynamic entities on an Intel Core i5-8400. 100k entities achieve a median frame time of **11.23 ms (~89.1 FPS)** in Render mode (**8.18 ms** No-Render) with 2D spatial hashing, maintaining **strictly 0 B GC allocations** and a rock-solid **3.1 MB managed heap**.
-- **Study 2 (straight-line movement):** Controlled baseline comparing the computational cost of moving 100k objects across four architectural approaches (Classic GameObjects Update, Job System Transforms, hierarchical common parent translation, and DOTS Pure ECS `IJobEntity`).
-- **How it was measured:** Automated standalone player builds with rendering enabled and disabled, 10s warm-up, and 30s sampling window logged to CSV (see [Methodology](#methodology)).
+- **What:** Benchmark testing mass-entity behavior in Unity 6 (Entities 6.6.0, Entities Graphics, Burst, URP). It covers two scenarios: swarm movement with neighbor separation, and straight-line movement.
+- **Study 1 (swarm to target):** Scaled from 10k to 100k dynamic entities. With a 2D spatial hash grid, 100k entities run at a median frame time of **11.23 ms (~89.1 FPS)** in Render mode (**8.18 ms** No-Render) in standalone builds. No GC allocations occur during steady-state simulation (0 B per frame), with managed heap staying at 3.1 MB.
+- **Study 2 (straight-line movement):** A stress-test with 100k cubes comparing four movement mechanisms (classic MonoBehaviour `Update`, C# Job System with transforms, moving a common parent, and DOTS `IJobEntity`). With rendering enabled, DOTS achieves **5.30 ms (~188.8 FPS)** compared to **8.27 ms** for common parent and **47.79 ms** for classic `Update`.
+- **How it was measured:** Standalone player builds logging per-frame deltas via `FrameTimeLogger` to CSV over a 30 s measurement window following a 10 s warm-up (both with rendering enabled and disabled).
 
-> [!IMPORTANT]
-> **Scope of the comparison.** This is a personal learning project.
-> - **Study 2** is the controlled one: identical behaviour (move along Z at equal speed), so the numbers compare *mechanisms* for moving N objects.
-> - **Study 1** compares *approaches to a task* (a swarm converging without stacking). Box2D's contact solver and my hash-based separation are different mechanisms, so the numbers answer "what does each approach cost for this task", **not** "how many times is ECS faster than GameObjects in general".
+> [!NOTE]
+> **Scope of the comparison:**
+> - **Study 2** is a controlled test: identical straight-line movement along Z at equal speed to compare specific movement mechanisms for 100k objects.
+> - **Study 1** compares two different approaches to the same task: Box2D iterative contact solving versus custom spatial hash separation. It evaluates the performance cost of each approach, rather than claiming a general ECS vs GameObject speedup.
 
 ## Key metrics
 
-**Render** build, frame time in ms as **median / p99**. Full tables (including No-Render) are in the studies below.
+Standalone player build with rendering enabled, frame times in ms as **median / p99**.
 
-**Study 1 — swarm to target**
+**Study 1 — Swarm to target (with separation)**
 
 | Variant | 10 000 | 50 000 | 100 000 |
 |:--|:--:|:--:|:--:|
-| A: GO + Box2D | 13.60 / 18.40 | n/m | n/m |
-| B: DOTS, 3D scan | 2.74 / 4.63 | 15.99 / 21.47 | 35.68 / 43.45 |
-| C: DOTS, 2D scan | 1.99 / 4.86 | 5.51 / 7.65 | 11.23 / 14.81 |
+| A: GO + Box2D | 13.60 / 18.40 | — | — |
+| B: DOTS, 3D search (27 cells) | 2.74 / 4.63 | 15.99 / 21.47 | 35.68 / 43.45 |
+| C: DOTS, 2D search (9 cells) | 1.99 / 4.86 | 5.51 / 7.65 | 11.23 / 14.81 |
 
-**Study 2 — straight-line movement (100k entities stress-test)**
+**Study 2 — Straight-line movement (100k stress-test)**
 
 | Variant | 100 000 |
 |:--|:--:|
 | A: GO, Update | 47.79 / 50.88 |
 | B: GO, Jobs | 26.04 / 29.60 |
-| C: GO, move common parent | 8.27 / 10.25 |
+| C: GO, common parent | 8.27 / 10.25 |
 | D: DOTS, IJobEntity | 5.30 / 8.50 |
 
 ---
@@ -58,32 +60,36 @@
 ## Methodology
 
 > [!NOTE]
-> **Render / No-Render.** Every configuration is built and measured twice. **Render** is the full frame (what the player sees). **No-Render** has the renderers disabled and isolates simulation and transform cost from draw cost, which differs between GameObjects (`MeshRenderer`) and Entities Graphics.
+> **Render and No-Render modes:** Every configuration is built and measured twice.
+> - **Render:** Full frame with rendering enabled (in Study 2 most cubes are outside the camera view, so Render mostly measures culling and bounds updates).
+> - **No-Render:** Mesh renderers / Entities Graphics disabled, isolating simulation and transform calculation costs from draw call overhead.
 
-| Item | Value |
+| Parameter | Value |
 |:--|:--|
-| Hardware | Intel Core i5-8400 (6C / 6T @ 2.80 GHz) / Discrete GPU / 16 GB DDR4 |
+| CPU | Intel Core i5-8400 (6C / 6T @ 2.80 GHz) / 16 GB DDR4 |
+| GPU / API | NVIDIA GeForce GTX 1660 SUPER (6 GB VRAM) / Direct3D 11 |
 | Unity / Entities | 6000.6.3f1 / 6.6.0 (Entities Graphics, URP 17.6.0) |
-| Scene | Orthographic camera, unlit cube mesh, zero Post-Processing overhead |
-| Spawn | Uniform distribution across XY plane |
-| Warm-up / sample window | 10 s warm-up / 30 s sampling window (`FrameTimeLogger`) |
-| Runs per cell | 30 s continuous window (~800 – 14,000+ logged frames per run) |
-| Frame time | per-frame duration (`Time.unscaledDeltaTime`) logged to CSV, see `Assets/Scripts/FrameTimeLogger.cs` |
+| Scene setup | Orthographic camera (size: 5, clip planes: 0.3 .. 1000), unlit cube mesh |
+| Spawn layout | Uniform distribution across the XY plane |
+| Sample window | 10 s warm-up followed by 30 s continuous CSV logging (`FrameTimeLogger`) |
+| Sample size | 626 to 23,400+ frames per 30 s run (depending on frame rate) |
+| Frame time | Per-frame delta (`Time.unscaledDeltaTime`) recorded to CSV |
 | Median | 50th percentile of per-frame times |
-| p99 | 99th percentile of per-frame times (Excel `PERCENTILE.INC`): 99% of frames are faster than this value |
-| Other metrics | GC alloc (Profile Analyzer), Native Memory / Managed Heap (Memory Profiler) |
+| p99 | 99th percentile of per-frame times (Excel `PERCENTILE.INC`) |
+| 1% low FPS | Calculated lower bound framerate: `1000 / p99` |
+| Profiling tools | Unity Profile Analyzer and Unity Memory Profiler |
 
 ---
 
-# Study 1 — Swarm to target (separation)
+# Study 1 — Swarm to target (with separation)
 
 ## Variants
 
-| ID | Variant | Movement to target | Separation / neighbour search |
+| ID | Variant | Movement towards target | Separation / neighbor search |
 |:--:|:--|:--|:--|
-| **A** | GameObjects | `Rigidbody2D` + `BoxCollider2D`, velocity toward target | Box2D contact solver |
-| **B** | DOTS, 3D scan | Burst `MoveJob` | `NativeParallelMultiHashMap` hash, **27** neighbour cells |
-| **C** | DOTS, 2D scan | Burst `MoveJob` | same hash, **9** neighbour cells (motion is planar, Z = 0) |
+| **A** | GameObjects | `Rigidbody2D` + `BoxCollider2D` | Box2D contact solver |
+| **B** | DOTS, 3D search | Burst `MoveJob` | `NativeParallelMultiHashMap`, checks **27** neighboring cells |
+| **C** | DOTS, 2D search | Burst `MoveJob` | `NativeParallelMultiHashMap`, checks **9** neighboring cells (planar motion on Z = 0) |
 
 <details>
 <summary><b>Simulation parameters</b></summary>
@@ -99,55 +105,57 @@
 
 ## Results
 
-"n/m" means not measured, with the reason. Memory is reported as **Native Memory / Managed Heap** (in-use unmanaged memory vs managed C# GC heap).
+Measurements from Standalone Player builds over a 30 s sampling window. Memory reported as **Native Memory / Managed Heap**.
 
-|      Variant       | Entities |    Render: median / p99     | No-Render: median / p99 | Simulation time | GC alloc | Memory |
-| :----------------: | :------: | :-------------------------: | :---------------------: | :-------------: | :------: | :----: |
-|  **A** GO + Box2D  |  10 000  |        13.60 / 18.40        |      12.22 / 20.00      |       30        |  236 B   | 256 MB / 5.2 MB |
-|  **A** GO + Box2D  |  50 000  |  n/m: 10k already 13.6 ms   |            –            |        –        |    –     |   –    |
-|  **A** GO + Box2D  | 100 000  |  n/m: 10k already 13.6 ms   |            –            |        –        |    –     |   –    |
-| **B** DOTS 3D scan |  10 000  |         2.74 / 4.63         |       2.13 / 4.43       |       30        |   0 B    | 260 MB / 3.1 MB |
-| **B** DOTS 3D scan |  50 000  |        15.99 / 21.47        |      14.40 / 17.45      |       30        |   0 B    | 272 MB / 3.1 MB |
-| **B** DOTS 3D scan | 100 000  |        35.68 / 43.45        |      33.26 / 40.91      |       30        |   0 B    | 289 MB / 3.1 MB |
-| **C** DOTS 2D scan |  10 000  |         1.99 / 4.86         |       1.64 / 4.22       |       30        |   0 B    | 260 MB / 3.1 MB |
-| **C** DOTS 2D scan |  50 000  |         5.51 / 7.65         |       4.09 / 5.01       |       30        |   0 B    | 272 MB / 3.1 MB |
-| **C** DOTS 2D scan | 100 000  |        11.23 / 14.81        |       8.18 / 9.61       |       30        |   0 B    | 289 MB / 3.1 MB |
+| Variant | Entities | Render: median / p99 | No-Render: median / p99 | GC Alloc / frame | Memory (Native / Heap) |
+| :---: | :---: | :---: | :---: | :---: | :---: |
+| **A** GO + Box2D | 10 000 | 13.60 / 18.40 ms | 12.22 / 20.00 ms | 236 B | 256 MB / 5.2 MB |
+| **A** GO + Box2D | 50 000 | — | — | — | — |
+| **A** GO + Box2D | 100 000 | — | — | — | — |
+| **B** DOTS 3D | 10 000 | 2.74 / 4.63 ms | 2.13 / 4.43 ms | 0 B | 260 MB / 3.1 MB |
+| **B** DOTS 3D | 50 000 | 15.99 / 21.47 ms | 14.40 / 17.45 ms | 0 B | 272 MB / 3.1 MB |
+| **B** DOTS 3D | 100 000 | 35.68 / 43.45 ms | 33.26 / 40.91 ms | 0 B | 289 MB / 3.1 MB |
+| **C** DOTS 2D | 10 000 | 1.99 / 4.86 ms | 1.64 / 4.22 ms | 0 B | 260 MB / 3.1 MB |
+| **C** DOTS 2D | 50 000 | 5.51 / 7.65 ms | 4.09 / 5.01 ms | 0 B | 272 MB / 3.1 MB |
+| **C** DOTS 2D | 100 000 | **11.23 / 14.81 ms** | **8.18 / 9.61 ms** | 0 B | 289 MB / 3.1 MB |
 
-### Profiler captures
+### Profiler captures (Study 1)
 
-| Frame breakdown (GO, 10k) | Memory breakdown (GO, 10k) |
+*(Captured in Unity Editor in Profile Analyzer and Memory Profiler for Render mode)*
+
+| Profile Analyzer (Editor) | Memory Profiler (Editor) |
 |:--:|:--:|
 | <img src="docs/profiler-frame-go-10k.png" alt="Profile Analyzer GO 10k" width="420"/> | <img src="docs/memory-breakdown-go-10k.png" alt="Memory breakdown GO 10k" width="420"/> |
-| <sub>10k GameObjects: Median 13.6 ms (~73 FPS), GC Collect 1.75 ms</sub> | <sub>Managed Heap: 5.2 MB, Native: 256.5 MB, 10 007 GameObjects (70 184 Scene Objects)</sub> |
+| <sub>**A (GO 10k)**: Editor median 13.6 ms, GC Collect pause 1.75 ms</sub> | <sub>Managed Heap: 5.2 MB, Native: 256.5 MB, 10 007 GameObjects (70 184 Scene Objects)</sub> |
 
-| Frame breakdown (DOTS, 10k) | Memory breakdown (DOTS, 10k) |
+| Profile Analyzer (Editor) | Memory Profiler (Editor) |
 |:--:|:--:|
 | <img src="docs/profiler-frame-10k.png" alt="Profile Analyzer 10k" width="420"/> | <img src="docs/memory-breakdown-10k.png" alt="Memory breakdown 10k" width="420"/> |
-| <sub>10k entities: Median 2.7 ms (~370 FPS), zero GC Collect</sub> | <sub>Managed Heap: 3.1 MB, Native: 260.1 MB, 7 GameObjects total</sub> |
+| <sub>**C (DOTS 2D 10k)**: Editor median 2.7 ms (Standalone: 1.99 ms), 0 B GC</sub> | <sub>Managed Heap: 3.1 MB, Native: 260.1 MB, 7 GameObjects</sub> |
 
-| Frame breakdown (DOTS, 50k) | Memory breakdown (DOTS, 50k) |
+| Profile Analyzer (Editor) | Memory Profiler (Editor) |
 |:--:|:--:|
 | <img src="docs/profiler-frame-50k.png" alt="Profile Analyzer 50k" width="420"/> | <img src="docs/memory-breakdown-50k.png" alt="Memory breakdown 50k" width="420"/> |
-| <sub>50k entities: Median 7.4 ms (~135 FPS), zero GC Collect</sub> | <sub>Managed Heap: 3.1 MB, Native: 271.8 MB, 7 GameObjects total</sub> |
+| <sub>**C (DOTS 2D 50k)**: Editor median 7.4 ms (Standalone: 5.51 ms), 0 B GC</sub> | <sub>Managed Heap: 3.1 MB, Native: 271.8 MB, 7 GameObjects</sub> |
 
-| Frame breakdown (DOTS, 100k) | Memory breakdown (DOTS, 100k) |
+| Profile Analyzer (Editor) | Memory Profiler (Editor) |
 |:--:|:--:|
 | <img src="docs/profiler-frame-100k.png" alt="Profile Analyzer 100k" width="420"/> | <img src="docs/memory-breakdown-100k.png" alt="Memory breakdown 100k" width="420"/> |
-| <sub>100k entities: Median 15.0 ms (~67 FPS), zero GC Collect</sub> | <sub>Managed Heap: 3.1 MB, Native: 288.8 MB, 7 GameObjects total</sub> |
+| <sub>**C (DOTS 2D 100k)**: Editor median 15.0 ms (Standalone: 11.23 ms), 0 B GC</sub> | <sub>Managed Heap: 3.1 MB, Native: 288.8 MB, 7 GameObjects</sub> |
 
-## Architecture
+## Simulation loop architecture
 
-Order of work inside one frame (DOTS variants):
+Execution sequence within a frame (DOTS variants):
 
 ```mermaid
 flowchart LR
     subgraph SIM["SimulationSystemGroup"]
         direction LR
-        A["BuildSpatialHashJob<br/>rebuild hash"] --> B["MoveJob<br/>attraction + separation<br/>27 cells (3D) / 9 cells (2D)"]
-        B --> C["KillAuraJob<br/>distance² ≤ R²"]
+        A["BuildSpatialHashJob<br/>rebuild hash grid"] --> B["MoveJob<br/>attraction to target + separation<br/>27 cells (3D) / 9 cells (2D)"]
+        B --> C["KillAuraJob<br/>check kill aura radius"]
     end
-    C --> D["EndSimulation ECB<br/>playback: DestroyEntity"]
-    D --> E["Respawn<br/>keep population constant"]
+    C --> D["EndSimulation ECB<br/>destroy entities in radius"]
+    D --> E["SpawnJob (BeginSimulation ECB)<br/>respawn to target count"]
 
     classDef job fill:#161b22,stroke:#58a6ff,color:#c9d1d9
     classDef ecb fill:#161b22,stroke:#f78166,color:#c9d1d9
@@ -157,107 +165,103 @@ flowchart LR
     class E spawn
 ```
 
-The simulation loop executes sequentially within `SimulationSystemGroup`. `BuildSpatialHashJob` populates the grid keys in parallel; `MoveJob` consumes this hash to compute flocking attraction and neighbor repulsion forces. Subsequently, `KillAuraJob` schedules entity destruction into `EndSimulationEntityCommandBufferSystem`, which safely executes structural changes at the frame sync point before respawning maintains population equilibrium.
+In each frame, `BuildSpatialHashJob` rebuilds the spatial hash grid across worker threads. `MoveJob` samples neighboring cells to apply steering away from nearby entities. `KillAuraJob` flags entities near the target and writes destruction commands to `EndSimulationEntityCommandBufferSystem`. During the next frame, `CubeSpawnerSystem` checks the population deficit and schedules `SpawnJob` via `BeginSimulationEntityCommandBufferSystem` to maintain a constant count.
 
 ---
 
-# Study 2 — Straight-line movement of N objects
+# Study 2 — Straight-line movement of 100 000 objects
 
-Identical behaviour in all variants: every cube moves along the **Z axis** at the **same speed**. This isolates the cost of the movement mechanism itself.
+All cubes move along the **Z axis** at the same speed (`speed = 5`). The objective is to isolate the performance cost of the movement mechanism itself.
 
 ## Variants
 
-| ID | Variant | How the objects move |
+| ID | Variant | Movement implementation |
 |:--:|:--|:--|
-| **A** | GameObjects, `Update` | each cube has a `MonoBehaviour` that moves itself every frame |
-| **B** | GameObjects, Jobs | all transforms in a `TransformAccessArray`, moved by one `IJobParallelForTransform` scheduled from a single `Update` |
-| **C** | GameObjects, common parent | all cubes are children of one empty parent; only the parent is moved (one `Transform` write per frame, $O(1)$), children are static in local space |
-| **D** | DOTS, `IJobEntity` | Burst-compiled `IJobEntity` updating `LocalTransform` components in parallel (`ScheduleParallel`) |
-
-Variant C is compared against variants A and B, where the cubes have no common parent.
-
-> [!NOTE]
-> A plain `IJobParallelFor` cannot touch a `Transform`; moving GameObjects from a job needs `IJobParallelForTransform` with a `TransformAccessArray`.
+| **A** | GameObjects, Update | Each cube has a `CubeMover` MonoBehaviour calling `transform.position += ...` in `Update()` |
+| **B** | GameObjects, Jobs | All cube transforms are registered in a `TransformAccessArray` and updated by an `IJobParallelForTransform` job |
+| **C** | GameObjects, common parent | All 100,000 cubes are parented to a single empty GameObject. The script moves only the parent; child local positions remain unchanged |
+| **D** | DOTS, `IJobEntity` | Burst-compiled `IJobEntity` updates `LocalTransform` components in parallel via `ScheduleParallel()` |
 
 <details>
-<summary><b>Controls kept equal across variants</b></summary>
+<summary><b>Controls kept equal</b></summary>
 
-- Same speed, same `deltaTime` usage; the sample window is time-based, so every variant runs under equal duration (30 s continuous window).
-- Benchmarked at **100 000 entities stress-test scale** to expose CPU bottlenecks, cache locality limits, and hierarchy overhead.
-- Variants A, B, and D: all GameObjects/entities are flat (no parents), the best case for `TransformAccessArray`. Variant C: one empty parent for all cubes.
-- Same unlit material and camera setup; SRP Batcher active.
-- Dedicated standalone player builds with `FrameTimeLogger` (10 s warm-up, 30 s measurement window).
+- Movement speed is identical across all variants (`speed = 5` along Z).
+- Objects are spawned across a wide area (`spawnMaxDistance = 1000`), so the camera frustum culls the majority of cubes, directly testing engine culling and bounding volume performance.
+- Stress-tested at a fixed scale of **100 000 entities**.
+- In variants A, B, and D, objects have no parents (flat hierarchy). In variant C, all cubes share one root parent.
+- Same unlit cube mesh, material, and orthographic camera across all variants.
+- Measured in dedicated Standalone Player builds using `FrameTimeLogger`.
 
 </details>
 
 ## Results
 
-Measurements taken on **100 000 entities** in Standalone Player builds over 30 s sampling windows. Memory metrics captured via Unity Memory Profiler and Profile Analyzer in Render mode.
+Measurements recorded for **100 000 entities** in Standalone Player builds (30 s window). Memory metrics captured via Unity Memory Profiler and Profile Analyzer in Render mode.
 
-| Variant | Entities | Render: median / p99 | FPS @ median (1% low) | No-Render: median / p99 | FPS @ median (1% low) | Movement script cost | GC alloc | Memory (Native / Heap) |
+| Variant | Entities | Render: median / p99 | FPS (1% low) | No-Render: median / p99 | FPS (1% low) | Script CPU Time (Editor, Render) | GC Alloc / frame | Editor Memory (Native / Heap)* |
 |:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
 | **A** GO, Update | 100 000 | 47.79 / 50.88 ms | 20.9 (19.7) | 28.08 / 29.31 ms | 35.6 (34.1) | 42.95 ms | 0 B | 1.65 GB / 78.7 MB |
-| **B** GO, Jobs | 100 000 | 26.04 / 29.60 ms | 38.4 (33.8) | 7.39 / 9.04 ms | 135.2 (110.6) | 4.46 ms | 2.8 KB | 1.68 GB / 76.1 MB |
-| **C** GO, common parent | 100 000 | 8.27 / 10.25 ms | 121.0 (97.5) | **1.10 / 4.95 ms** | **910.2 (202.2)** | **0.55 ms** | ~1.4 KB | 1.69 GB / 73.9 MB |
-| **D** DOTS, `IJobEntity` | 100 000 | **5.30 / 8.50 ms** | **188.8 (117.7)** | 1.85 / 2.85 ms | 539.6 (350.5) | 0.82 ms | 1.3 KB | **1.37 GB / 65.7 MB** |
+| **B** GO, Jobs | 100 000 | 26.04 / 29.60 ms | 38.4 (33.8) | 7.39 / 9.04 ms | 135.2 (110.6) | 4.46 ms | 0 B | 1.68 GB / 76.1 MB |
+| **C** GO, common parent | 100 000 | 8.27 / 10.25 ms | 121.0 (97.5) | **1.10 / 4.95 ms** | **910.2 (202.2)** | **0.55 ms** | 0 B | 1.69 GB / 73.9 MB |
+| **D** DOTS, `IJobEntity` | 100 000 | **5.30 / 8.50 ms** | **188.8 (117.7)** | 1.85 / 2.85 ms | 539.6 (350.5) | 0.82 ms | 0 B | **1.37 GB / 65.7 MB** |
 
-> [!TIP]
-> **Performance Winners:**
-> - **Simulation only (No-Render):** **Variant C (Common Parent, 1.10 ms)** wins by executing a single root transform translation ($O(1)$) instead of updating 100,000 entities individually ($O(N)$).
-> - **Real-world game frame (Render):** **Variant D (DOTS Pure ECS, 5.30 ms / ~189 FPS)** is the overall winner, outperforming Common Parent by **~1.56x** and classic Update by **~9.0x**.
+*\* Notes: All four movement implementations produce 0 B of managed allocations during steady-state simulation (the occasional ~1–3 KB seen in editor profiler snapshots comes from editor systems like the Game View Stats text overlay). Memory figures come from Memory Profiler snapshots in the Editor; compare variants with each other, absolute values include editor overhead.*
 
-### Profiler captures
+### Profiler captures (Study 2)
 
-| Frame breakdown (GO Update, 100k) | Memory breakdown (GO Update, 100k) |
+| Profile Analyzer (CPU) | Memory Profiler (Memory) |
 |:--:|:--:|
 | <img src="docs/study2-profiler-a.png" alt="Profile Analyzer GO Update 100k" width="420"/> | <img src="docs/study2-memory-a.png" alt="Memory breakdown GO Update 100k" width="420"/> |
-| <sub>100k GameObjects Update: Median 47.8 ms (~21 FPS), Scripts 42.9 ms, BoundingVolumes 47.1 ms</sub> | <sub>Managed Heap: 78.7 MB, Native: 1.65 GB, 100 007 GameObjects (500 579 Scene Objects)</sub> |
+| <sub>**A (GO Update)**: Standalone 47.8 ms (~21 FPS) \| Editor median: 122.0 ms, Scripts: 42.95 ms, BoundingVolumes: 47.06 ms</sub> | <sub>Managed Heap: 78.7 MB, Native: 1.65 GB, 100 007 GameObjects (500 579 Scene Objects)</sub> |
 
-| Frame breakdown (GO Jobs, 100k) | Memory breakdown (GO Jobs, 100k) |
+| Profile Analyzer (CPU) | Memory Profiler (Memory) |
 |:--:|:--:|
 | <img src="docs/study2-profiler-b.png" alt="Profile Analyzer GO Jobs 100k" width="420"/> | <img src="docs/study2-memory-b.png" alt="Memory breakdown GO Jobs 100k" width="420"/> |
-| <sub>100k GameObjects Jobs: Median 26.0 ms (~38 FPS), Scripts 4.46 ms (10x faster execution)</sub> | <sub>Managed Heap: 76.1 MB, Native: 1.68 GB, 100 007 GameObjects (500 587 Scene Objects)</sub> |
+| <sub>**B (GO Jobs)**: Standalone 26.0 ms (~38 FPS) \| Editor median: 56.0 ms, Scripts: 4.46 ms</sub> | <sub>Managed Heap: 76.1 MB, Native: 1.68 GB, 100 007 GameObjects (500 587 Scene Objects)</sub> |
 
-| Frame breakdown (GO Common Parent, 100k) | Memory breakdown (GO Common Parent, 100k) |
+| Profile Analyzer (CPU) | Memory Profiler (Memory) |
 |:--:|:--:|
 | <img src="docs/study2-profiler-c.png" alt="Profile Analyzer GO Common Parent 100k" width="420"/> | <img src="docs/study2-memory-c.png" alt="Memory breakdown GO Common Parent 100k" width="420"/> |
-| <sub>100k GameObjects Parent: Median 8.27 ms (~121 FPS), Scripts 0.55 ms, BoundingVolumes 23.0 ms</sub> | <sub>Managed Heap: 73.9 MB, Native: 1.69 GB, 100 007 GameObjects (500 603 Scene Objects)</sub> |
+| <sub>**C (GO Parent)**: Standalone 8.27 ms (~121 FPS) \| Editor median: 15.3 ms, Scripts: 0.55 ms, BoundingVolumes: 22.97 ms</sub> | <sub>Managed Heap: 73.9 MB, Native: 1.69 GB, 100 007 GameObjects (500 603 Scene Objects)</sub> |
 
-| Frame breakdown (DOTS IJobEntity, 100k) | Memory breakdown (DOTS IJobEntity, 100k) |
+| Profile Analyzer (CPU) | Memory Profiler (Memory) |
 |:--:|:--:|
 | <img src="docs/study2-profiler-d.png" alt="Profile Analyzer DOTS 100k" width="420"/> | <img src="docs/study2-memory-d.png" alt="Memory breakdown DOTS 100k" width="420"/> |
-| <sub>100k DOTS Entities: Median 5.30 ms (~189 FPS), Scripts 0.82 ms, Zero GameObject overhead</sub> | <sub>Managed Heap: 65.7 MB, Native: 1.37 GB, only 7 GameObjects total (617 Scene Objects)</sub> |
+| <sub>**D (DOTS Pure ECS)**: Standalone 5.30 ms (~189 FPS) \| Editor median: 8.47 ms, Scripts: 0.82 ms, GPU Uploads: 4.03 ms</sub> | <sub>Managed Heap: 65.7 MB, Native: 1.37 GB, 7 GameObjects total (617 Scene Objects)</sub> |
 
-## Deep Architectural Analysis
+## Analysis of the results
 
-### 1. The Simulation Illusion ($O(1)$ Parent vs $O(N)$ DOTS in No-Render)
-In simulation-only mode (**No-Render**):
-- **Variant C (Common Parent)** records **1.10 ms (0.55 ms scripts)**. Moving the parent translates a single root transform in $O(1)$ time. Because rendering is completely disabled, the engine never needs world-space bounds or matrices for the children — their local transforms remain pristine in memory.
-- **Variant D (DOTS Pure ECS)** records **1.85 ms (0.82 ms scripts)**. Unlike Common Parent, DOTS is actively doing real work on all 100,000 entities: streaming 100,000 `LocalTransform` components linearly through L1/L2 CPU cache lines and updating positions via SIMD Burst worker threads.
+### 1. Why Common Parent is fastest in No-Render (1.10 ms)
+In No-Render mode, moving the common parent took only **1.10 ms** (script execution took 0.55 ms in the Editor profile). The C# code only updates one root transform. Because rendering is disabled, Unity skips calculating world-space transforms and bounding boxes for the 100,000 child objects, leaving their local positions unchanged.
 
-### 2. Why DOTS Dominates the Full Frame (Render mode)
-When rendering is enabled (**Render**):
-- In **Variant C**, the engine can no longer ignore the children. Even though scripts only take 0.55 ms, Unity's C++ rendering pipeline must evaluate 100,000 individual `MeshRenderer` components. Profiler reveals `UpdateRendererBoundingVolumes` consuming **22.97 ms**, pulling the standalone frame time to **8.27 ms** (121 FPS).
-- In **Variant D**, Unity leverages **Entities Graphics & BatchRendererGroup (BRG)**. Instead of traversing a 100k GameObject hierarchy, BRG executes Frustum Culling (`FrustumCullingJob`: 7.26 ms) and GPU uploads (`ExecuteGpuUploads`: 4.03 ms) directly in parallel Burst jobs, pushing transforms directly into GPU constant buffers. DOTS achieves **5.30 ms (188.8 FPS)**.
+In contrast, DOTS actively updates every entity: the parallel Burst job streams through chunk arrays and rewrites `LocalTransform` components for all 100,000 entities in **1.85 ms** (script execution took 0.82 ms in the Editor profile).
 
-### 3. Engine Footprint & Memory Hierarchy
-- **GameObject Overhead:** Classic GameObjects (Variants A, B, C) instantiate **100,007 GameObjects** and allocate **500,000+ native scene objects** (Transform, MeshFilter, MeshRenderer, etc.), consuming **1.65 – 1.80 GB** of native engine memory and risking 5–8 ms GC spikes.
-- **Pure ECS Footprint:** DOTS has only **7 GameObjects** and **617 Scene Objects** total, saving over **300 MB** of native engine memory and achieving rock-solid deterministic frame pacing.
+### 2. Why DOTS wins in Render mode (5.30 ms vs 8.27 ms)
+When rendering is enabled, the hierarchy advantage disappears:
+- In **Variant C (Common Parent)**, Unity must now update the visual bounding volumes of all 100,000 individual `MeshRenderer` components (`UpdateRendererBoundingVolumes` accounts for ~23 ms of cumulative work in the editor profile), raising the standalone frame time to **8.27 ms**.
+- In **Variant D (DOTS)**, rendering is handled by the **Entities Graphics** package. Instead of managing 100,000 separate `MeshRenderer` components, it processes culling and draw commands in parallel Burst jobs (`FrustumCullingJob`, `ExecuteGpuUploads`) without GameObject hierarchy overhead, keeping the frame time down to **5.30 ms (~188.8 FPS)**.
+
+### 3. Memory footprint and scene objects
+- Classic GameObjects (Variants A, B, C) instantiate **100,007 GameObjects** and allocate over **500,000 native C++ scene objects** (Transform, MeshFilter, MeshRenderer), requiring roughly **1.65 – 1.69 GB** of native engine memory in the editor.
+- DOTS requires only **7 GameObjects** and **617 Scene Objects** total, saving over **300 MB** of native engine memory.
 
 ---
 
-> [!IMPORTANT]
-> **Limitations and scope:**
-> - Study 1 compares distinct architectural paradigms for swarm separation (Box2D iterative solver vs custom DOTS Spatial Hash).
-> - Measurements reflect a single reference hardware configuration (Intel Core i5-8400, PC Standalone, D3D12).
-> - Classic GameObjects were not measured at 50k and 100k in Study 1 because 10k entities already exceeded the 16.6 ms frame budget (13.6 ms simulation + GC spikes).
+## Limitations and design decisions
+
+### Limitations:
+- **Study 1** evaluates two distinct algorithmic solutions (Box2D contact solver vs Spatial Hash separation) rather than isolating engine runtime overhead alone.
+- In **Study 1**, GameObjects were not benchmarked at 50k and 100k because 10k entities already approached the 60 FPS limit (13.60 ms median, 18.40 ms p99).
+- **Study 2** focused on a single high-stress baseline of 100,000 entities to evaluate system behavior under heavy load.
+- All numbers reflect a single reference machine (i5-8400, GTX 1660 SUPER, Direct3D 11).
 
 <details>
 <summary><b>Design decisions</b></summary>
 
-- **Per-frame Spatial Hash rebuild:** Rebuilding the `NativeParallelMultiHashMap` from scratch every frame in parallel via `BuildSpatialHashJob` proved faster and simpler than tracking incremental cell migrations for 100k constantly moving entities.
-- **Structural changes via ECB:** Spawning and despawning are deferred to `EndSimulationEntityCommandBufferSystem` to prevent job pipeline stalls and keep parallel worker threads saturated.
-- **2D vs 3D Hash Search:** Reducing neighbor checks from 27 cells to 9 planar cells (Z = 0) reduced 100k simulation frame time from 35.68 ms to 11.23 ms (~3.2x speedup).
+- **Per-frame spatial hash rebuild (Study 1):** Rebuilding the `NativeParallelMultiHashMap` from scratch each frame in parallel was simpler to implement and parallelizes cleanly across worker threads without complex cell-migration tracking.
+- **2D vs 3D hash search (Study 1):** Since movement is planar (Z = 0), reducing neighbor search from 27 cells to 9 reduced 100k frame time from 35.68 ms to 11.23 ms in Render mode (3.2x faster) and from 33.26 ms to 8.18 ms in No-Render mode (4.1x faster).
+- **TransformAccessArray for Jobs (Study 2):** In Variant B, `IJobParallelForTransform` allowed updating GameObject transforms across worker threads, eliminating the overhead of 100,000 individual MonoBehaviour `Update()` calls.
+- **Chunk-based IJobEntity (Study 2):** In Variant D, `IJobEntity` was scheduled with `ScheduleParallel()` to iterate over contiguous entity chunks with Burst compiler vectorization.
 
 </details>
 
@@ -265,7 +269,7 @@ When rendering is enabled (**Render**):
 
 ## Quick start
 
-**Requirements:** Unity `6000.6.3f1`, Entities `6.6.0` (check `Packages/manifest.json`).
+**Requirements:** Unity `6000.6.3f1`, Entities `6.6.0` (see `Packages/manifest.json`).
 
 ```bash
 git clone https://github.com/Checoffix/dots-swarm-benchmark.git
@@ -275,10 +279,10 @@ git clone https://github.com/Checoffix/dots-swarm-benchmark.git
 2. Open the scene for the study you want to run:
    - **Study 1 (DOTS):** `Assets/Scenes/Study1/DOTS_Scene.unity` (with subscene `HordeSubScene.unity`)
    - **Study 1 (GameObjects):** `Assets/Scenes/Study1/GO_Scene.unity`
-   - **Study 2 (Movement DOTS):** `Assets/Scenes/Study2/DOTS_Scene.unity` (with subscene `HordeSubScene.unity`)
-   - **Study 2 (Movement GameObjects):** `Assets/Scenes/Study2/GO_Scene.unity`
-3. **Play** to run in Editor, or **File → Build Settings → Build** for standalone benchmarking with `FrameTimeLogger`.
+   - **Study 2 (DOTS):** `Assets/Scenes/Study2/DOTS_Scene.unity` (with subscene `HordeSubScene.unity`)
+   - **Study 2 (GameObjects):** `Assets/Scenes/Study2/GO_Scene.unity`
+3. Press **Play** to run in Editor, or build standalone (**File → Build Settings → Build**) to log frame times with `FrameTimeLogger`.
 
 ## About
 
-First DOTS project by [Checoffix](https://github.com/Checoffix). Written as a learning case: every number above comes from my own measurements, and the log shows the mistakes too.
+Project by [Checoffix](https://github.com/Checoffix).
