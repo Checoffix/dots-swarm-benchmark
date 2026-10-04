@@ -20,7 +20,7 @@
 
 ## Demo
 
-> *Demo capture coming soon (Standalone Player build, 100k entities).*
+![Horde Swarm Simulation](docs/demo.gif)
 
 ## TL;DR
 

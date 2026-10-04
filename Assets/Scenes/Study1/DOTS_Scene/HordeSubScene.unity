@@ -150,7 +150,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EntitiesRefercesAuthoring
   bulletPrefabGameObject: {fileID: 2946688957640517781, guid: dcd2ffaf811eaa8498c3452f46b27612, type: 3}
   cubesCount: 100000
-  spawnMaxDistance: 1000
+  spawnMaxDistance: 500
   cellSize: 1.1
   minSeparationRadius: 1.1
   maxNeighboursCount: 64
